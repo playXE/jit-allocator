@@ -43,7 +43,7 @@ impl Default for JitAllocatorOptions {
         }
     }
 }
-/// A simple implementation of memory manager that uses `asmjit::VirtMem`
+/// A simple implementation of memory manager that uses [virtual_memory](crate::virtual_memory).
 /// functions to manage virtual memory for JIT compiled code.
 ///
 /// Implementation notes:
