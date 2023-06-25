@@ -24,7 +24,7 @@ wasmtime-jit-icache-coherence = "10.0"
 
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "*", features = ["memoryapi", "sysinfoapi", "handleapi"] }
+winapi = { version = "0.3", features = ["memoryapi", "sysinfoapi", "handleapi"] }
 
 [dev-dependencies]
 macroassembler = { git = "https://github.com/playxe/masm-rs" }
