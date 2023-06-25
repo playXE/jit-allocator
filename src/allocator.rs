@@ -970,7 +970,7 @@ impl JitAllocator {
                     area_index = 0;
 
                     nblock.search_start.set(area_size as _);
-                    println!("{} {}", nblock.area_size(), area_size);
+                   
                     nblock
                         .largest_unused_area
                         .set(nblock.area_size() - area_size);
