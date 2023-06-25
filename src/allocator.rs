@@ -570,7 +570,7 @@ impl JitAllocator {
 
         let mut pool_count = 1;
 
-        if params.use_multiple_pools {
+        if params.use_multiple_pools && false {
             pool_count = MULTI_POOL_COUNT;
         }
 
@@ -661,7 +661,7 @@ impl JitAllocator {
         block_size: usize,
     ) -> Result<Box<JitAllocatorBlock>, Error> {
         let area_size =
-            ((self.block_size) + (*pool).granularity as usize - 1) >> (*pool).granularity_log2;
+            (block_size + (*pool).granularity as usize - 1) >> (*pool).granularity_log2;
         let num_bit_words = (area_size + 32 - 1) / 32;
 
         let mut block = Box::new(JitAllocatorBlock {
@@ -970,6 +970,7 @@ impl JitAllocator {
                     area_index = 0;
 
                     nblock.search_start.set(area_size as _);
+                    println!("{} {}", nblock.area_size(), area_size);
                     nblock
                         .largest_unused_area
                         .set(nblock.area_size() - area_size);
