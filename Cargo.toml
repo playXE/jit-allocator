@@ -2,7 +2,7 @@
 name = "jit-allocator"
 version = "0.1.0"
 edition = "2021"
-LICENSE = "MIT"
+license = "MIT"
 description = "An executable code allocator"
 repository = "https://github.com/playxe/jit-allocator"
 readme = "README.md"
