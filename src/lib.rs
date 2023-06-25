@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 extern crate alloc;
 
 pub mod virtual_memory;
@@ -15,3 +15,11 @@ pub enum Error {
     FailedToOpenAnonymousMemory,
     TooLarge,
 }
+
+pub use {
+    virtual_memory::{
+        protect_jit_memory, ProtectJitAccess,
+        flush_instruction_cache
+    },
+    allocator::JitAllocator,
+};

@@ -8,7 +8,6 @@ use core::{
     ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign},
     sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
 };
-use std::thread::Scope;
 
 /// Virtual memory information.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

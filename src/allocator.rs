@@ -11,7 +11,7 @@ use crate::util::{
 };
 use crate::virtual_memory::{
     self, alloc, alloc_dual_mapping, protect_jit_memory, release, release_dual_mapping,
-    DualMapping, MemoryFlags, ProtectJitAccess,
+    DualMapping, MemoryFlags, ProtectJitAccess, flush_instruction_cache,
 };
 use crate::Error;
 
@@ -25,7 +25,7 @@ pub enum ResetPolicy {
     /// Hard reset, releases all memory used, if any.
     Hard = 1,
 }
-
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct JitAllocatorOptions {
     /// Enables the use of an anonymous memory-mapped memory that is mapped into two buffers having a different pointer.
     /// The first buffer has read and execute permissions and the second buffer has read+write permissions.
@@ -561,6 +561,7 @@ pub struct JitAllocator {
 }
 
 impl JitAllocator {
+    /// Creates a new JitAllocator instance.
     pub fn new(params: JitAllocatorOptions) -> Box<Self> {
         let vm_info = virtual_memory::info();
 
@@ -699,11 +700,10 @@ impl JitAllocator {
         };
 
         if self.options.fill_unused_memory {
-            let mut n = 0;
-            while n < block_size {
-                *virt_mem.rw.add(n).cast::<u32>() = self.fill_pattern;
-                n += size_of::<u32>();
-            }
+            protect_jit_memory(ProtectJitAccess::ReadWrite);
+            fill_pattern(virt_mem.rw, self.fill_pattern, block_size);
+            protect_jit_memory(ProtectJitAccess::ReadExecute);
+            flush_instruction_cache(virt_mem.rx, block_size);
         }
 
         block.area_size.set(area_size as _);
@@ -822,6 +822,7 @@ impl JitAllocator {
         }
 
         virtual_memory::protect_jit_memory(ProtectJitAccess::ReadExecute);
+
         let b = &mut *UnsafeRef::into_raw(block.remove().unwrap());
         b.used_bitvector_mut().fill(0);
         b.stop_bitvector_mut().fill(0);
@@ -834,6 +835,9 @@ impl JitAllocator {
         b.clear_flags(JitAllocatorBlock::FLAG_DIRTY);
     }
 
+    /// Resets current allocator by emptying all pools and blocks. 
+    /// 
+    /// Frees all memory is `ResetPolicy::Hard` is specified or `immediate_release` in [JitAllocatorOptions] is specific.
     pub fn reset(&mut self, reset_policy: ResetPolicy) {
         self.tree.clear();
 
@@ -843,6 +847,7 @@ impl JitAllocator {
             let pool = unsafe { &mut *self.pools[pool_id] };
 
             let mut cursor = pool.blocks.cursor_mut();
+            cursor.move_next();
             let mut block_to_keep = false;
             if reset_policy != ResetPolicy::Hard && !self.options.immediate_release {
                 block_to_keep = true;
@@ -867,6 +872,9 @@ impl JitAllocator {
         }
     }
 
+    /// Allocates `size` bytes in the executable memory region.
+    /// Returns two pointers. One points to Read-Execute mapping and another to Read-Write mapping.
+    /// All code writes *must* go to the Read-Write mapping.
     pub fn alloc(&mut self, size: usize) -> Result<(*const u8, *mut u8), Error> {
         const NO_INDEX: u32 = u32::MAX;
 
@@ -989,6 +997,7 @@ impl JitAllocator {
         }
     }
 
+    /// Releases the memory allocated by `alloc`.
     pub fn release(&mut self, rx_ptr: *const u8) -> Result<(), Error> {
         if rx_ptr.is_null() {
             return Err(Error::InvalidArgument);
@@ -1026,6 +1035,7 @@ impl JitAllocator {
                 protect_jit_memory(ProtectJitAccess::ReadWrite);
                 fill_pattern(span_ptr, self.fill_pattern, span_size);
                 protect_jit_memory(ProtectJitAccess::ReadExecute);
+                flush_instruction_cache(span_ptr, span_size);
             }
 
             if block.area_used() == 0 {
@@ -1042,7 +1052,7 @@ impl JitAllocator {
 
         Ok(())
     }
-
+    /// Shrinks the memory allocated by `alloc`.
     pub fn shrink(&mut self, rx_ptr: *const u8, new_size: usize) -> Result<(), Error> {
         if rx_ptr.is_null() {
             
@@ -1057,7 +1067,7 @@ impl JitAllocator {
             rxptr: rx_ptr,
             block_size: 0,
         }).get() else {
-            println!("not found");
+            
             return Err(Error::InvalidArgument);
         };
 
@@ -1096,6 +1106,7 @@ impl JitAllocator {
                     protect_jit_memory(ProtectJitAccess::ReadWrite);
                     fill_pattern(span_ptr, self.fill_pattern, span_size);
                     protect_jit_memory(ProtectJitAccess::ReadExecute);
+                    flush_instruction_cache(span_ptr, span_size);
                 }
             }
         }
