@@ -1001,8 +1001,10 @@ impl JitAllocator {
     /// Releases the memory allocated by `alloc`.
     /// 
     /// # SAFETY
-    /// 
-    /// `rx_ptr` must be a pointer returned by `alloc`.
+    /// - `rx_ptr` must have been returned from `alloc`
+    /// - `rx_ptr` must have been allocaetd from this allocator
+    /// - `rx_ptr` must not have been passed to `release` before
+    /// - `rx_ptr` must point to read-execute part of memory returned from `alloc`.
     pub unsafe fn release(&mut self, rx_ptr: *const u8) -> Result<(), Error> {
         if rx_ptr.is_null() {
             return Err(Error::InvalidArgument);
