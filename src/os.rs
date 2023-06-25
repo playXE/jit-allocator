@@ -5,9 +5,9 @@ pub fn get_tick_count() -> u32 {
                 fn GetTickCount() -> u32;
             }
 
-            GetTickCount()
+            unsafe { GetTickCount() }
         } else {
-            use std::mem::MaybeUninit;
+            use core::mem::MaybeUninit;
             let mut ts: MaybeUninit<libc::timespec> = MaybeUninit::zeroed();
 
             unsafe {

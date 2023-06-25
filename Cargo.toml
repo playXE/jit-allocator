@@ -9,7 +9,12 @@ edition = "2021"
 libc = "0.2"
 cfgenius = "0.1"
 errno = "0.3"
-chrono = "0.4"
 once_cell = "1.7"
-[cfg.'target_arch="x86_64"'.dependencies]
+intrusive-collections = "0.9"
+parking_lot = "0.12"
+cool-bitvector = "0.1"
+[target.'cfg(target_arch="riscv64")'.dependencies]
 wasmtime-jit-icache-coherence = "10.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "*", features = ["memoryapi", "sysinfoapi", "handleapi"] }

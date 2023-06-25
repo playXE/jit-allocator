@@ -1,5 +1,13 @@
 {
     "files.associations": {
         "mman.h": "c"
-    }
+    },
+    "rust-analyzer.linkedProjects": [
+        "./Cargo.toml",
+        "./Cargo.toml",
+        "./Cargo.toml",
+        "./Cargo.toml",
+        "./Cargo.toml"
+    ],
+    "rust-analyzer.cargo.target": "x86_64-pc-windows-gnu"
 }

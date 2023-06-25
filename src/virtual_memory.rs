@@ -1,9 +1,14 @@
-#![allow(unused_imports)]
-use std::{
+#![allow(unused_imports, dead_code)]
+use alloc::format;
+use alloc::string::String;
+
+use core::{
+    ffi::CStr,
     mem::MaybeUninit,
     ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign},
     sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
 };
+use std::thread::Scope;
 
 /// Virtual memory information.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -18,9 +23,9 @@ pub struct Info {
 #[repr(transparent)]
 pub struct MemoryFlags(pub u32);
 
-impl Into<u32> for MemoryFlags {
-    fn into(self) -> u32 {
-        self.0
+impl From<MemoryFlags> for u32 {
+    fn from(val: MemoryFlags) -> Self {
+        val.0
     }
 }
 
@@ -43,14 +48,13 @@ impl MemoryFlags {
     pub const ACCESS_EXECUTE: u32 = 0x00000004;
 
     /// Memory is readable and writable.
-    pub const ACCESS_RW: u32 = Self::ACCESS_READ as u32 | Self::ACCESS_WRITE as u32;
+    pub const ACCESS_RW: u32 = Self::ACCESS_READ | Self::ACCESS_WRITE;
 
     /// Memory is readable and executable.
-    pub const ACCESS_RX: u32 = Self::ACCESS_READ as u32 | Self::ACCESS_EXECUTE as u32;
+    pub const ACCESS_RX: u32 = Self::ACCESS_READ | Self::ACCESS_EXECUTE;
 
     /// Memory is readable, writable and executable.
-    pub const ACCESS_RWX: u32 =
-        Self::ACCESS_READ as u32 | Self::ACCESS_WRITE as u32 | Self::ACCESS_EXECUTE as u32;
+    pub const ACCESS_RWX: u32 = Self::ACCESS_READ | Self::ACCESS_WRITE | Self::ACCESS_EXECUTE;
 
     /// Use a `MAP_JIT` flag available on Apple platforms (introduced by Mojave), which allows JIT code to be
     /// executed in a MAC bundle.
@@ -91,13 +95,10 @@ impl MemoryFlags {
     /// However [alloc_dual_mapping] may automatically use this if `AccessExecute` is used.
     pub const MMAP_MAX_ACCESS_EXECUTE: u32 = 0x00000080;
 
-    pub const MMAP_MAX_ACCESS_RW: u32 =
-        Self::MMAP_MAX_ACCESS_READ as u32 | Self::MMAP_MAX_ACCESS_WRITE as u32;
-    pub const MMAP_MAX_ACCESS_RX: u32 =
-        Self::MMAP_MAX_ACCESS_READ as u32 | Self::MMAP_MAX_ACCESS_EXECUTE as u32;
-    pub const MMAP_MAX_ACCESS_RWX: u32 = Self::MMAP_MAX_ACCESS_READ as u32
-        | Self::MMAP_MAX_ACCESS_WRITE as u32
-        | Self::MMAP_MAX_ACCESS_EXECUTE as u32;
+    pub const MMAP_MAX_ACCESS_RW: u32 = Self::MMAP_MAX_ACCESS_READ | Self::MMAP_MAX_ACCESS_WRITE;
+    pub const MMAP_MAX_ACCESS_RX: u32 = Self::MMAP_MAX_ACCESS_READ | Self::MMAP_MAX_ACCESS_EXECUTE;
+    pub const MMAP_MAX_ACCESS_RWX: u32 =
+        Self::MMAP_MAX_ACCESS_READ | Self::MMAP_MAX_ACCESS_WRITE | Self::MMAP_MAX_ACCESS_EXECUTE;
 
     /// Use `MAP_SHARED` when calling mmap().
     ///
@@ -120,7 +121,7 @@ impl MemoryFlags {
 
 impl MemoryFlags {
     pub fn contains(self, other: u32) -> bool {
-        (self.0 as u32 & other as u32) != 0
+        (self.0 & other) != 0
     }
 }
 
@@ -243,12 +244,12 @@ pub enum ProtectJitAccess {
 }
 
 pub const DUAL_MAPPING_FILTER: [u32; 2] = [
-    MemoryFlags::ACCESS_WRITE | MemoryFlags::MMAP_MAX_ACCESS_WRITE as u32,
-    MemoryFlags::ACCESS_EXECUTE as u32 | MemoryFlags::MMAP_MAX_ACCESS_EXECUTE as u32,
+    MemoryFlags::ACCESS_WRITE | MemoryFlags::MMAP_MAX_ACCESS_WRITE,
+    MemoryFlags::ACCESS_EXECUTE | MemoryFlags::MMAP_MAX_ACCESS_EXECUTE,
 ];
 
 use errno::errno;
-#[cfg(not(windows))]
+
 use libc::*;
 
 use crate::Error;
@@ -272,24 +273,20 @@ cfgenius::define! {
 
 }
 
+fn error_from_errno() -> Error {
+    match errno().0 {
+        EACCES | EAGAIN | ENODEV | EPERM => Error::InvalidState,
+        EFBIG | ENOMEM | EOVERFLOW => Error::OutOfMemory,
+        EMFILE | ENFILE => Error::TooManyHandles,
+
+        _ => Error::InvalidArgument,
+    }
+}
+
 cfgenius::cond! {
     if cfg(not(windows))
     {
-        fn error_from_errno() -> Error {
-            match errno().0 {
-                EACCES
-                | EAGAIN
-                | ENODEV
-                | EPERM => Error::InvalidState,
-                EFBIG
-                | ENOMEM
-                | EOVERFLOW => Error::OutOfMemory,
-                EMFILE
-                | ENFILE => Error::TooManyHandles,
 
-                _ => Error::InvalidArgument
-            }
-        }
 
         fn get_vm_info() -> Info {
             extern "C" {
@@ -348,11 +345,16 @@ cfgenius::cond! {
 
         #[cfg(not(target_os="freebsd"))]
         fn get_tmp_dir() -> String {
-            if let Ok(dir) = std::env::var("TMPDIR") {
-                return dir;
+            unsafe{
+                let env = getenv(b"TMPDIR\0".as_ptr() as *const _);
+
+                if !env.is_null() {
+                    CStr::from_ptr(env).to_string_lossy().into_owned()
+                } else {
+                    String::from("/tmp")
+                }
             }
 
-            "/tmp".to_string()
         }
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -367,7 +369,7 @@ cfgenius::cond! {
             filetype: FileType,
             tmpname: String,
         }
-
+        #[allow(clippy::needless_late_init)]
         impl AnonymousMemory {
             fn open(&mut self, prefer_tmp_over_dev_shm: bool) -> Result<(), Error> {
                 cfgenius::cond! {
@@ -430,7 +432,7 @@ cfgenius::cond! {
 
                         for _ in 0..retry_count {
                             bits = bits.wrapping_sub(crate::os::get_tick_count() as u64 * 773703683);
-                            bits = ((bits >> 14) ^ (bits << 6)) + INTERNAL_COUNTER.fetch_add(1, Ordering::AcqRel) as u64 + 1 * 10619863;
+                            bits = ((bits >> 14) ^ (bits << 6)) + INTERNAL_COUNTER.fetch_add(1, Ordering::AcqRel) as u64 + 10619863;
 
                             let use_tmp;
                             cfgenius::cond! {
@@ -506,7 +508,7 @@ cfgenius::cond! {
                         libc::unlink(self.tmpname.as_ptr() as *const c_char);
                     }
 
-                    return;
+
                 }
 
             }
@@ -575,27 +577,29 @@ cfgenius::cond! {
     }
 }
 
-pub fn get_anonymous_memory_strategy() -> Result<AnonymousMemoryStrategy, Error> {
-    cfgenius::cond! {
-        if macro(vm_shm_detect) {
-            use std::sync::atomic::AtomicU8;
-            static GLOBAL_STRATEGY: AtomicU8 = AtomicU8::new(0);
+cfgenius::cond! {
+    if cfg(not(windows)) {
 
-            if GLOBAL_STRATEGY.load(Ordering::Acquire) != 0 {
-                return Ok(unsafe { std::mem::transmute(GLOBAL_STRATEGY.load(Ordering::Acquire)) });
+        pub fn get_anonymous_memory_strategy() -> Result<AnonymousMemoryStrategy, Error> {
+            cfgenius::cond! {
+                if macro(vm_shm_detect) {
+                    use std::sync::atomic::AtomicU8;
+                    static GLOBAL_STRATEGY: AtomicU8 = AtomicU8::new(0);
+
+                    if GLOBAL_STRATEGY.load(Ordering::Acquire) != 0 {
+                        return Ok(unsafe { std::mem::transmute(GLOBAL_STRATEGY.load(Ordering::Acquire)) });
+                    }
+
+                    let strategy = detect_anonymous_memory_strategy()?;
+
+                    GLOBAL_STRATEGY.store(strategy as u8, Ordering::Release);
+
+                    Ok(strategy)
+                }
             }
 
-            let strategy = detect_anonymous_memory_strategy()?;
-
-            GLOBAL_STRATEGY.store(strategy as u8, Ordering::Release);
-
-            Ok(strategy)
-        } else {
-            return Ok(AnonymousMemoryStrategy::TmpDir)
+            Ok(AnonymousMemoryStrategy::TmpDir)
         }
-    }
-}
-
 /// Detects whether the current process is hardened, which means that pages that have WRITE and EXECUTABLE flags
 /// cannot be normally allocated. On OSX + AArch64 such allocation requires MAP_JIT flag, other platforms don't
 /// support this combination.
@@ -613,7 +617,7 @@ pub fn has_hardened_runtime() -> bool {
                 let page_size = info().page_size;
 
                 unsafe {
-                    let ptr = libc::mmap(std::ptr::null_mut(), page_size as _, libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS, -1, 0);
+                    let ptr = libc::mmap(core::ptr::null_mut(), page_size as _, libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS, -1, 0);
 
                     if ptr == libc::MAP_FAILED {
                         flag = 2;
@@ -626,7 +630,7 @@ pub fn has_hardened_runtime() -> bool {
                 GLOBAL_HARDENED_FLAG.store(flag, Ordering::Release);
             }
 
-            return flag == 2;
+            flag == 2
         }
     }
 }
@@ -658,14 +662,14 @@ pub fn map_jit_from_memory_flags(memory_flags: MemoryFlags) -> i32 {
                 if has_map_jit_support() {
                     return libc::MAP_JIT as i32;
                 } else {
-                    return 0;
+                    0
                 }
             } else {
-                return 0;
+                0
             }
         } else {
             let _ = memory_flags;
-            return 0;
+            0
         }
     }
 }
@@ -732,7 +736,7 @@ fn map_memory(
     }
     unsafe {
         let ptr = libc::mmap(
-            std::ptr::null_mut(),
+            core::ptr::null_mut(),
             size as _,
             protection,
             mm_flags,
@@ -792,8 +796,8 @@ fn unmap_dual_mapping(dm: &mut DualMapping, size: usize) -> Result<(), Error> {
     err1?;
     err2?;
 
-    dm.rx = std::ptr::null_mut();
-    dm.rw = std::ptr::null_mut();
+    dm.rx = core::ptr::null_mut();
+    dm.rw = core::ptr::null_mut();
 
     Ok(())
 }
@@ -810,8 +814,8 @@ fn unmap_dual_mapping(dm: &mut DualMapping, size: usize) -> Result<(), Error> {
 /// Both pointers in `dm` would be set to `null` if the function fails.
 pub fn alloc_dual_mapping(size: usize, memory_flags: MemoryFlags) -> Result<DualMapping, Error> {
     let mut dm = DualMapping {
-        rx: std::ptr::null_mut(),
-        rw: std::ptr::null_mut(),
+        rx: core::ptr::null_mut(),
+        rw: core::ptr::null_mut(),
     };
 
     if size as isize <= 0 {
@@ -831,7 +835,7 @@ pub fn alloc_dual_mapping(size: usize, memory_flags: MemoryFlags) -> Result<Dual
     anon_mem.open(prefer_tmp_over_dev_shm)?;
     anon_mem.allocate(size)?;
 
-    let mut ptr = [std::ptr::null_mut(), std::ptr::null_mut()];
+    let mut ptr = [core::ptr::null_mut(), core::ptr::null_mut()];
 
     for i in 0..2 {
         let restricted_memory_flags = memory_flags.0 & !DUAL_MAPPING_FILTER[i];
@@ -845,7 +849,7 @@ pub fn alloc_dual_mapping(size: usize, memory_flags: MemoryFlags) -> Result<Dual
             Ok(p) => p,
             Err(e) => {
                 if i == 1 {
-                    let _ = unmap_memory(ptr[0], size)?;
+                    let _ = unmap_memory(ptr[0], size);
                 }
 
                 return Err(e);
@@ -865,6 +869,17 @@ pub fn alloc_dual_mapping(size: usize, memory_flags: MemoryFlags) -> Result<Dual
 pub fn release_dual_mapping(dm: &mut DualMapping, size: usize) -> Result<(), Error> {
     unmap_dual_mapping(dm, size)
 }
+
+
+    }
+}
+
+pub fn info() -> Info {
+    static INFO: once_cell::sync::Lazy<Info> = once_cell::sync::Lazy::new(|| get_vm_info());
+
+    *INFO
+}
+
 /// Flushes instruction cache in the given region.
 ///
 /// Only useful on non-x86 architectures, however, it's a good practice to call it on any platform to make your
@@ -941,28 +956,21 @@ pub fn flush_instruction_cache(p: *const u8, size: usize) {
                 unsafe {
                     let _ = wasmtime_jit_icache_coherence::clear_cache(p.cast(), size);
                     let _ = wasmtime_jit_icache_coherence::pipeline_flush_mt();
-                }  
+                }
             } else {
                 // TODO: Should we error here?
                 //compile_error!("icache invalidation not implemented for target platform");
             }
-        
+
     }
-    
+
 }
 
-
-pub fn info() -> Info {
-    static INFO: once_cell::sync::Lazy<Info> = once_cell::sync::Lazy::new(|| {
-        get_vm_info()
-    });
-
-    *INFO
-}
-
-
+#[cfg(not(windows))]
 pub fn hardened_runtime_info() -> HardenedRuntimeInfo {
-    HardenedRuntimeInfo { flags: get_hardened_runtime_flags() }
+    HardenedRuntimeInfo {
+        flags: get_hardened_runtime_flags(),
+    }
 }
 /// Protects access of memory mapped with MAP_JIT flag for the current thread.
 ///
@@ -971,28 +979,233 @@ pub fn hardened_runtime_info() -> HardenedRuntimeInfo {
 /// `pthread_jit_write_protect_np()` call when available.
 ///
 /// This function must be called before and after a memory mapped with MAP_JIT flag is modified. Example:
-/// 
-/// ```mustfail,rust 
+///
+/// ```mustfail,rust
 /// let code_ptr = ...;
 /// let code_size = ...;
-/// 
+///
 /// protect_jit_memory(ProtectJitAccess::ReadWrite);
 /// copy_nonoverlapping(source, code_ptr, code_size);
 /// protect_jit_memory(ProtectJitAccess::ReadOnly);
 /// flush_instruction_cache(code_ptr, code_size);
-/// 
+///
 /// ```
 pub fn protect_jit_memory(access: ProtectJitAccess) {
-    #[cfg(all(target_os="macos", target_arch="aarch64"))] 
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
         unsafe {
             let x = match access {
                 ProtectJitAccess::ReadWrite => 0,
-                _ => 1
+                _ => 1,
             };
 
             libc::pthread_jit_write_protect_np(x);
         }
     }
     let _ = access;
+}
+
+cfgenius::cond! {
+
+    if cfg(windows) {
+
+        use winapi::um::sysinfoapi::SYSTEM_INFO;
+        use winapi::{
+            shared::{minwindef::DWORD, ntdef::HANDLE},
+            um::{
+                handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
+                memoryapi::{
+                    CreateFileMappingW, MapViewOfFile, UnmapViewOfFile, VirtualAlloc, VirtualFree,
+                    VirtualProtect, FILE_MAP_EXECUTE, FILE_MAP_READ, FILE_MAP_WRITE,
+                },
+                sysinfoapi::GetSystemInfo,
+                winnt::{
+                    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
+                    PAGE_READONLY, PAGE_READWRITE,
+                },
+            },
+        };
+        
+
+        struct ScopedHandle {
+            value: HANDLE
+        }
+
+        impl ScopedHandle {
+            fn new() -> Self {
+                Self { value: core::ptr::null_mut() }
+            }
+        }
+
+        impl Drop for ScopedHandle {
+            fn drop(&mut self) {
+                if !self.value.is_null() {
+                    unsafe {
+                        CloseHandle(self.value);
+                    }
+                }
+            }
+        }
+
+        fn get_vm_info() -> Info {
+            let mut system_info = MaybeUninit::<SYSTEM_INFO>::uninit();
+            unsafe {
+                GetSystemInfo(system_info.as_mut_ptr());
+
+                let system_info = system_info.assume_init();
+
+                Info {
+                    page_size: system_info.dwPageSize as u32,
+                    page_granularity: system_info.dwAllocationGranularity as u32,
+                }
+            }
+        }
+
+        fn protect_flags_from_memory_flags(memory_flags: MemoryFlags) -> DWORD {
+            let protect_flags;
+
+            if memory_flags.contains(MemoryFlags::ACCESS_EXECUTE) {
+                protect_flags = if memory_flags.contains(MemoryFlags::ACCESS_WRITE) {
+                    PAGE_EXECUTE_READWRITE
+                } else {
+                    PAGE_EXECUTE_READ
+                };
+            } else if memory_flags.contains(MemoryFlags::ACCESS_RW) {
+                protect_flags = if memory_flags.contains(MemoryFlags::ACCESS_WRITE) {
+                    PAGE_READWRITE
+                } else {
+                    PAGE_READONLY
+                };
+            } else {
+                protect_flags = PAGE_READONLY;
+            }
+
+            protect_flags
+        }
+
+        fn desired_access_from_memory_flags(memory_flags: MemoryFlags) -> DWORD {
+            let mut access = if memory_flags.contains(MemoryFlags::ACCESS_WRITE) {
+                FILE_MAP_WRITE
+            } else {
+                FILE_MAP_READ
+            };
+
+            if memory_flags.contains(MemoryFlags::ACCESS_EXECUTE) {
+                access |= FILE_MAP_EXECUTE;
+            }
+
+            access
+        }
+
+        pub fn alloc(size: usize, memory_flags: MemoryFlags) -> Result<*mut u8, Error> {
+            if size == 0 {
+                return Err(Error::InvalidArgument)
+            }
+
+            unsafe {
+                let protect = protect_flags_from_memory_flags(memory_flags);
+                let result = VirtualAlloc(core::ptr::null_mut(), size, MEM_COMMIT | MEM_RESERVE, protect);
+
+                if result.is_null() {
+                    return Err(Error::OutOfMemory)
+                }
+
+                Ok(result as *mut u8)
+            }
+        }
+
+        pub fn release(ptr: *mut u8, size: usize) -> Result<(), Error> {
+            if size == 0 || ptr.is_null() {
+                return Err(Error::InvalidArgument)
+            }
+
+            unsafe {
+                if VirtualFree(ptr as *mut _, 0, MEM_RELEASE) == 0 {
+                    return Err(Error::InvalidArgument)
+                }
+            }
+
+            Ok(())
+        }
+
+        pub fn protect(p: *mut u8, size: usize, memory_flags: MemoryFlags) -> Result<(), Error> {
+            let protect_flags = protect_flags_from_memory_flags(memory_flags);
+            let mut old_flags = 0;
+
+            unsafe {
+                if VirtualProtect(p as _, size, protect_flags, &mut old_flags) != 0 {
+                    return Ok(())
+                }
+
+                Err(Error::InvalidArgument)
+            }
+        }
+
+        pub fn alloc_dual_mapping(size: usize, memory_flags: MemoryFlags) -> Result<DualMapping, Error> {
+            if size == 0 {
+                return Err(Error::InvalidArgument)
+            }
+
+            let mut handle = ScopedHandle::new();
+
+            unsafe { 
+                handle.value = CreateFileMappingW(
+                    INVALID_HANDLE_VALUE,
+                    core::ptr::null_mut(),
+                    PAGE_EXECUTE_READWRITE,
+                    ((size as u64) >> 32) as _,
+                    (size & 0xFFFFFFFF) as _,
+                    core::ptr::null_mut()
+                );
+
+                if handle.value.is_null() {
+                    return Err(Error::OutOfMemory);
+                }
+
+                let mut ptr = [core::ptr::null_mut(), core::ptr::null_mut()];
+
+                for i in 0..2 {
+                    let access_flags = memory_flags.0 & !DUAL_MAPPING_FILTER[i];
+                    let desired_access = protect_flags_from_memory_flags(access_flags.into());
+                    ptr[i] = MapViewOfFile(handle.value, desired_access, 0, 0, size);
+
+                    if ptr[i].is_null() {
+                        if i == 0 {
+                            UnmapViewOfFile(ptr[0]);
+                        }
+
+                        return Err(Error::OutOfMemory);
+                    }
+                }
+
+                Ok(DualMapping {
+                    rx: ptr[0] as _,
+                    rw: ptr[1] as _,
+                })
+            }
+        }
+
+        pub fn release_dual_mapping(dm: &mut DualMapping, _size: usize) -> Result<(), Error> {
+            let mut failed = false;
+
+            unsafe {
+                if UnmapViewOfFile(dm.rx as _) == 0 {
+                    failed = true;
+                }
+
+                if dm.rx != dm.rw && UnmapViewOfFile(dm.rw as _) == 0 {
+                    failed = true;
+                }
+
+                if failed {
+                    return Err(Error::InvalidArgument);
+                }
+
+                dm.rx = core::ptr::null_mut();
+                dm.rw = core::ptr::null_mut();
+
+                Ok(())
+            }
+        }
+    }
 }
