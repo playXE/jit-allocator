@@ -7,7 +7,7 @@ description = "An executable code allocator"
 repository = "https://github.com/playxe/jit-allocator"
 readme = "README.md"
 documentation = "https://docs.rs/jit-allocator"
-keywords = ["jit", "allocator", "executable", "code", "memory", "jit-allocator"]
+keywords = ["jit", "allocator", "executable", "code", "memory"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
