@@ -1166,7 +1166,7 @@ cfgenius::cond! {
 
                 for i in 0..2 {
                     let access_flags = memory_flags.0 & !DUAL_MAPPING_FILTER[i];
-                    let desired_access = protect_flags_from_memory_flags(access_flags.into());
+                    let desired_access = desired_access_from_memory_flags(access_flags.into());
                     ptr[i] = MapViewOfFile(handle.value, desired_access, 0, 0, size);
 
                     if ptr[i].is_null() {
