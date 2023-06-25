@@ -33,8 +33,8 @@ fn main() {
 
     println!("f(1, 2) = {}", f(1, 2));
 
-    alloc.release(rx).unwrap();
+    unsafe { alloc.release(rx).unwrap(); }
 
-    alloc.reset(jit_allocator::allocator::ResetPolicy::Hard);
+    unsafe { alloc.reset(jit_allocator::allocator::ResetPolicy::Hard); }
 }
 

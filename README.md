@@ -12,7 +12,7 @@ let (rx, rw) = jit_allocator.alloc(size)?;
 
 protect_jit_memory(ProtectJitAccess::ReadWrite); // allows to write to RWX code in current thread,
                                                  // it is no-op on all platforms except macOS AArch64
-copy_nonoverlapping(compiled_code, rw, compiled_code_size); 
+unsafe { copy_nonoverlapping(compiled_code, rw, compiled_code_size);  }
 protect_jit_memory(ProtectJitAccess::ReadExecute); // disables writes to RWX code in current thread, 
                                                    // it is no-op on all platforms except macOS AArch64
 flush_instruction_cache(rx, compiled_code_size); // flush icache, not required on x86-64 
@@ -20,6 +20,7 @@ flush_instruction_cache(rx, compiled_code_size); // flush icache, not required o
                                                  // to lack of coherent dcache/icache.
 
 // When you're done with your machine code you can release it:
-
-jit_allocator.release(rx);
+unsafe { 
+    jit_allocator.release(rx)?;
+}
 ```

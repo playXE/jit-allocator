@@ -838,7 +838,7 @@ impl JitAllocator {
     /// Resets current allocator by emptying all pools and blocks. 
     /// 
     /// Frees all memory is `ResetPolicy::Hard` is specified or `immediate_release` in [JitAllocatorOptions] is specific.
-    pub fn reset(&mut self, reset_policy: ResetPolicy) {
+    pub unsafe fn reset(&mut self, reset_policy: ResetPolicy) {
         self.tree.clear();
 
         let pool_count = self.pools.len();
@@ -998,7 +998,11 @@ impl JitAllocator {
     }
 
     /// Releases the memory allocated by `alloc`.
-    pub fn release(&mut self, rx_ptr: *const u8) -> Result<(), Error> {
+    /// 
+    /// # SAFETY
+    /// 
+    /// `rx_ptr` must be a pointer returned by `alloc`.
+    pub unsafe fn release(&mut self, rx_ptr: *const u8) -> Result<(), Error> {
         if rx_ptr.is_null() {
             return Err(Error::InvalidArgument);
         }
@@ -1053,7 +1057,11 @@ impl JitAllocator {
         Ok(())
     }
     /// Shrinks the memory allocated by `alloc`.
-    pub fn shrink(&mut self, rx_ptr: *const u8, new_size: usize) -> Result<(), Error> {
+    /// 
+    /// # SAFETY
+    /// 
+    /// `rx_ptr` must be a pointer returned by `alloc`.
+    pub unsafe fn shrink(&mut self, rx_ptr: *const u8, new_size: usize) -> Result<(), Error> {
         if rx_ptr.is_null() {
             
             return Err(Error::InvalidArgument);
