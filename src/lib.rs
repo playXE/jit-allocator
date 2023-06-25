@@ -21,5 +21,5 @@ pub use {
         protect_jit_memory, ProtectJitAccess,
         flush_instruction_cache
     },
-    allocator::JitAllocator,
+    allocator::{JitAllocator, JitAllocatorOptions, ResetPolicy},
 };

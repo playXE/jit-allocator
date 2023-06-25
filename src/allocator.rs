@@ -1155,3 +1155,5 @@ unsafe fn fill_pattern(mem: *mut u8, pattern: u32, size_in_bytes: usize) {
         p.add(i).write(pattern);
     }
 }
+
+unsafe impl Send for JitAllocator {}
