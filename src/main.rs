@@ -1,4 +1,4 @@
-/*use jit_allocator::allocator::{JitAllocator, JitAllocatorOptions};
+use jit_allocator::allocator::{JitAllocator, JitAllocatorOptions};
 fn main() {
     let mut opts = JitAllocatorOptions::default();
     opts.use_dual_mapping = true;
@@ -29,6 +29,3 @@ fn main() {
 
     println!("{:p} {:p}", rx, rw);
 }
-*/
-
-fn main() {}
