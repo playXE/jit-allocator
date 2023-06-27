@@ -74,12 +74,13 @@ dependencies = [
 [[package]]
 name = "jit-allocator"
 version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6a8385174e58e217b188b52aacaf60798a2ecb82bd15c2911656739938bf92a"
 dependencies = [
  "cfgenius",
  "errno",
  "intrusive-collections",
  "libc",
- "macroassembler",
  "once_cell",
  "parking_lot",
  "wasmtime-jit-icache-coherence",
@@ -88,14 +89,13 @@ dependencies = [
 
 [[package]]
 name = "jit-allocator"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6a8385174e58e217b188b52aacaf60798a2ecb82bd15c2911656739938bf92a"
+version = "0.2.5"
 dependencies = [
  "cfgenius",
  "errno",
  "intrusive-collections",
  "libc",
+ "macroassembler",
  "once_cell",
  "parking_lot",
  "wasmtime-jit-icache-coherence",
@@ -135,7 +135,7 @@ dependencies = [
  "cfg-if",
  "errno",
  "iced-x86",
- "jit-allocator 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jit-allocator 0.2.4",
  "libc",
  "num",
  "num-traits",
