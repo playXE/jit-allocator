@@ -263,8 +263,7 @@ cfgenius::define! {
 
     has_shm_open = cfg(not(target_os="android"));
     has_pthread_jit_write_protect_np = cfg(all(
-        target_os="macos",
-        target_arch="aarch64"
+        target_os="macos"
     ));
 
     has_shm_anon = cfg(target_os="freebsd");
@@ -605,7 +604,7 @@ cfgenius::cond! {
 #[cfg(not(windows))]
 pub fn has_hardened_runtime() -> bool {
     cfgenius::cond! {
-        if cfg(all(target_os="macos", target_arch="aarch64")) {
+        if cfg(all(target_os="macos")) {
             true
         } else {
             static GLOBAL_HARDENED_FLAG: AtomicU32 = AtomicU32::new(0);
@@ -636,7 +635,7 @@ pub fn has_hardened_runtime() -> bool {
 
 pub const fn has_map_jit_support() -> bool {
     cfgenius::cond! {
-        if cfg(all(target_os="macos", target_arch="aarch64")) {
+        if cfg(all(target_os="macos")) {
             true
         } else {
             false
