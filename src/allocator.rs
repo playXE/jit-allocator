@@ -34,7 +34,7 @@ pub struct JitAllocatorOptions {
     ///
     /// ## Remarks
     ///
-    /// Dual mapping would be automatically turned on by \ref JitAllocator in case of hardened runtime that
+    /// Dual mapping would be automatically turned on by [JitAllocator] in case of hardened runtime that
     /// enforces `W^X` policy, so specifying this flag is essentually forcing to use dual mapped pages even when RWX
     /// pages can be allocated and dual mapping is not necessary.
     pub use_dual_mapping: bool,
@@ -82,7 +82,7 @@ const DEFAULT_FILL_PATTERN: u32 = 0xCCCCCCCC; // int3
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 const DEFAULT_FILL_PATTERN: u32 = 0x0; // int3
 
-/// Number of pools to use when `JitAllocatorOptions::kUseMultiplePools` is set.
+/// Number of pools to use when `JitAllocatorOptions::use_multiple_pools` is set.
 ///
 /// Each pool increases granularity twice to make memory management more
 /// efficient. Ideal number of pools appears to be 3 to 4 as it distributes

@@ -309,7 +309,7 @@ cfgenius::cond! {
                 unsafe {
                     let mut osname: MaybeUninit<utsname> = MaybeUninit::uninit();
                     uname(osname.as_mut_ptr());
-                    ver = atoi(CStr::from_ptr((*osname.as_ptr()).release).to_bytes().as_ptr());
+                    ver = atoi(CStr::from_ptr((*osname.as_ptr()).release.as_ptr().cast()).to_bytes().as_ptr().cast());
                     GLOBAL_VERSION.store(ver, Ordering::Relaxed);
                 }
             }
@@ -369,6 +369,7 @@ cfgenius::cond! {
         }
         #[allow(clippy::needless_late_init)]
         impl AnonymousMemory {
+            #[allow(unused_variables)]
             fn open(&mut self, prefer_tmp_over_dev_shm: bool) -> Result<(), Error> {
                 cfgenius::cond! {
                     if cfg(target_os="linux") {
@@ -559,7 +560,7 @@ cfgenius::cond! {
             anon_mem.allocate(vm_info.page_size as usize)?;
 
             unsafe {
-                let ptr = libc::mmap(std::ptr::null_mut(), vm_info.page_size, libc::PROT_READ | libc::PROT_EXEC, libc::MAP_SHARED, anon_mem.fd, 0);
+                let ptr = libc::mmap(core::ptr::null_mut(), vm_info.page_size as _, libc::PROT_READ | libc::PROT_EXEC, libc::MAP_SHARED, anon_mem.fd, 0);
                 if ptr == libc::MAP_FAILED {
                     if errno().0 == EINVAL {
                         return Ok(AnonymousMemoryStrategy::TmpDir);
@@ -567,7 +568,7 @@ cfgenius::cond! {
 
                     return Err(error_from_errno());
                 } else {
-                    libc::munmap(ptr, vm_info.page_size);
+                    libc::munmap(ptr, vm_info.page_size as _);
                     Ok(AnonymousMemoryStrategy::DevShm)
                 }
             }
@@ -577,22 +578,22 @@ cfgenius::cond! {
 
 cfgenius::cond! {
     if cfg(not(windows)) {
-
+        #[allow(unreachable_code)]
         pub fn get_anonymous_memory_strategy() -> Result<AnonymousMemoryStrategy, Error> {
             cfgenius::cond! {
                 if macro(vm_shm_detect) {
-                    use std::sync::atomic::AtomicU8;
+                    use core::sync::atomic::AtomicU8;
                     static GLOBAL_STRATEGY: AtomicU8 = AtomicU8::new(0);
 
                     if GLOBAL_STRATEGY.load(Ordering::Acquire) != 0 {
-                        return Ok(unsafe { std::mem::transmute(GLOBAL_STRATEGY.load(Ordering::Acquire)) });
+                        return Ok(unsafe { core::mem::transmute(GLOBAL_STRATEGY.load(Ordering::Acquire)) });
                     }
 
                     let strategy = detect_anonymous_memory_strategy()?;
 
                     GLOBAL_STRATEGY.store(strategy as u8, Ordering::Release);
 
-                    Ok(strategy)
+                    return Ok(strategy)
                 }
             }
 
@@ -653,8 +654,8 @@ pub fn map_jit_from_memory_flags(memory_flags: MemoryFlags) -> i32 {
             // MAP_JIT is not required when dual-mapping memory and is incompatible with MAP_SHARED, so it will not be
             // added when the latter is enabled.
 
-            let use_map_jit = (memory_flags.contains(MemoryFlags::MMapEnableJit) || has_hardened_runtime())
-                && !memory_flags.contains(MemoryFlags::MapShared);
+            let use_map_jit = (memory_flags.contains(MemoryFlags::MMAP_ENABLE_JIT) || has_hardened_runtime())
+                && !memory_flags.contains(MemoryFlags::MAP_SHARED);
 
             if use_map_jit {
                 if has_map_jit_support() {
