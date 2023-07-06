@@ -914,7 +914,7 @@ pub fn flush_instruction_cache(p: *const u8, size: usize) {
                 let code = p as usize;
                 let end = code + size;
 
-                let addr;
+
                 use core::arch::asm;
 
                 const ICACHE_LINE_SIZE: usize = 4;
@@ -924,7 +924,7 @@ pub fn flush_instruction_cache(p: *const u8, size: usize) {
 
                 while addr < end {
                     unsafe {
-                        asm!("dc civac {}", in(reg) addr);
+                        asm!("dc civac, {x}", x = in(reg) addr);
                     }
                     addr += ICACHE_LINE_SIZE;
                 }
@@ -937,7 +937,7 @@ pub fn flush_instruction_cache(p: *const u8, size: usize) {
 
                 while addr < end {
                     unsafe {
-                        asm!("ic ivau {}", in(reg) addr);
+                        asm!("ic ivau, {x}", x = in(reg) addr);
                     }
                     addr += ICACHE_LINE_SIZE;
                 }
