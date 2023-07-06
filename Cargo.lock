@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "jit-allocator"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "cfgenius",
  "errno",
