@@ -919,9 +919,9 @@ pub fn flush_instruction_cache(p: *const u8, size: usize) {
 
                 const ICACHE_LINE_SIZE: usize = 4;
                 const DCACHE_LINE_SIZE: usize = 4;
-                println!("{:x}", code);
+                
                 let mut addr = code & !(DCACHE_LINE_SIZE - 1);
-                println!("addr: {:x}", addr);
+               
                 while addr < end {
                     unsafe {
                         asm!("dc civac, {x}", x = in(reg) addr);

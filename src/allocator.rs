@@ -696,7 +696,6 @@ impl JitAllocator {
             alloc_dual_mapping(block_size, MemoryFlags::ACCESS_RWX.into())?
         } else {
             let rx = alloc(block_size, MemoryFlags::ACCESS_RWX.into())?;
-            println!("{:p}", rx);
             DualMapping { rx, rw: rx }
         };
 
